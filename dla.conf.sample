@@ -1,0 +1,5 @@
+# dbuser is the username used to connect to the database
+dbuser = dla
+
+# dbpass is the password used to connect to the database
+dbpass = lamepass
