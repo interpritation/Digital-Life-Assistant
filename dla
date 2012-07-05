@@ -1,0 +1,64 @@
+#!/usr/bin/perl -t
+
+use strict;
+use warnings;
+
+use lib './';
+
+use AnyEvent;
+use Config::Simple;
+use DBI;
+
+my $j = AnyEvent->condvar;
+
+my $cnfile = './dla.conf';
+my $dbfile = './dla.db';
+
+# Load config
+unless( -e $cnfile ) {
+   print "Missing config file: $cnfile\n";
+   exit;
+}
+my %config;
+Config::Simple->import_from($cnfile, \%config);
+
+# Connect to db
+unless( -e $dbfile ) {
+   generate_db();
+}
+my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", 
+   $config{'default.dbuser'}, 
+   $config{'default.dbpass'}
+);
+use Data::Dumper; print Dumper($dbh->tables);
+
+#TODO Load comm modules
+#TODO Load task modules
+
+# The Loop
+$j->wait;
+
+sub generate_db {
+
+   my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", 
+      $config{'default.dbuser'}, 
+      $config{'default.dbpass'}
+   );
+
+   # Generate default tables and info
+   my $query = 'CREATE TABLE modules (module_id INTEGER PRIMARY KEY ASC, '
+      . 'module_name TEXT, module_type TEXT, module_config INTEGER)';
+   my $tmp = $dbh->prepare($query);
+   $tmp->execute;
+   $tmp->finish;
+
+   $query = 'CREATE TABLE config (config_id INTEGER PRIMARY KEY ASC, '
+      . 'config_key TEXT, config_value TEXT, module_id INTEGER, FOREIGN '
+      . 'KEY(module_id) REFERENCES modules(module_id))';
+   $tmp = $dbh->prepare($query);
+   $tmp->execute;
+   $tmp->finish;
+
+   $dbh->disconnect;
+
+} # end of generate_db method
