@@ -12,7 +12,6 @@ use DBI;
 my $j = AnyEvent->condvar;
 
 my $cnfile = './dla.conf';
-my $dbfile = './dla.db';
 
 # Load config
 unless( -e $cnfile ) {
@@ -21,6 +20,7 @@ unless( -e $cnfile ) {
 }
 my %config;
 Config::Simple->import_from($cnfile, \%config);
+my $dbfile = $config{'default.dbname'};
 
 # Connect to db
 unless( -e $dbfile ) {
