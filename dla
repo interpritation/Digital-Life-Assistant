@@ -1,4 +1,4 @@
-#!/usr/bin/perl -t
+#!/usr/bin/perl 
 
 use strict;
 use warnings;
@@ -30,10 +30,17 @@ my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile",
    $config{'default.dbuser'}, 
    $config{'default.dbpass'}
 );
-use Data::Dumper; print Dumper($dbh->tables);
 
-#TODO Load comm modules
-#TODO Load task modules
+#Load modules
+opendir(DIR, "Modules");
+my @files = readdir(DIR); 
+foreach my $file (@files) {
+   if( $file =~ m/pm$/xms ) {
+      (my $module = 'Modules::' . $file) =~ s/\.pm$//g;
+      require 'Modules/' . $file;
+      $module->import($dbh);
+   }
+}
 
 # The Loop
 $j->wait;
@@ -46,15 +53,44 @@ sub generate_db {
    );
 
    # Generate default tables and info
-   my $query = 'CREATE TABLE modules (module_id INTEGER PRIMARY KEY ASC, '
-      . 'module_name TEXT, module_type TEXT, module_config INTEGER)';
+   my $query = 'CREATE TABLE modules (module_id INTEGER PRIMARY KEY ASC '
+      . 'AUTOINCREMENT, module_name TEXT, module_type TEXT, module_config '
+      . 'INTEGER)';
    my $tmp = $dbh->prepare($query);
    $tmp->execute;
    $tmp->finish;
 
-   $query = 'CREATE TABLE config (config_id INTEGER PRIMARY KEY ASC, '
-      . 'config_key TEXT, config_value TEXT, module_id INTEGER, FOREIGN '
+   $query = 'CREATE TABLE config (config_id INTEGER PRIMARY KEY ASC '
+      . 'AUTOINCREMENT, config_key TEXT, config_value TEXT, module_id '
+      . 'INTEGER, FOREIGN KEY(module_id) REFERENCES modules(module_id))';
+   $tmp = $dbh->prepare($query);
+   $tmp->execute;
+   $tmp->finish;
+
+   $query = 'CREATE TABLE users (user_id INTEGER PRIMARY KEY ASC '
+      . 'AUTOINCREMENT, user_name TEXT)';
+   $tmp = $dbh->prepare($query);
+   $tmp->execute;
+   $tmp->finish;
+
+   $query = 'CREATE TABLE identities (ident_id INTEGER PRIMARY KEY ASC '
+      . 'AUTOINCREMENT, user_id INTEGER, ident_name STRING, module_id '
+      . 'INTEGER, FOREIGN KEY(user_id) REFERENCES users(user_id), FOREIGN '
       . 'KEY(module_id) REFERENCES modules(module_id))';
+   $tmp = $dbh->prepare($query);
+   $tmp->execute;
+   $tmp->finish;
+
+   $query = 'CREATE TABLE commands (cmd_id INTEGER PRIMARY KEY ASC '
+      . 'AUTOINCREMENT, cmd_name STRING, cmd_method STRING, module_id '
+      . 'INTEGER, FOREIGN KEY(module_id) REFERENCES modules(module_id))';
+   $tmp = $dbh->prepare($query);
+   $tmp->execute;
+   $tmp->finish;
+
+   $query = 'CREATE TABLE permissions (user_id INTEGER, cmd_id INTEGER, '
+      . 'FOREIGN KEY(user_id) REFERENCES users(user_id), FOREIGN '
+      . 'KEY(cmd_id) REFERENCES commands(cmd_id))';
    $tmp = $dbh->prepare($query);
    $tmp->execute;
    $tmp->finish;
