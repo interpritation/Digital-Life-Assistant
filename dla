@@ -23,9 +23,7 @@ Config::Simple->import_from($cnfile, \%config);
 my $dbfile = $config{'default.dbname'};
 
 # Connect to db
-unless( -e $dbfile ) {
-   generate_db();
-}
+generate_db();
 my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", 
    $config{'default.dbuser'}, 
    $config{'default.dbpass'}
@@ -38,7 +36,8 @@ foreach my $file (@files) {
    if( $file =~ m/pm$/xms ) {
       (my $module = 'Modules::' . $file) =~ s/\.pm$//g;
       require 'Modules/' . $file;
-      $module->import($dbh);
+      my $configs = config_module($dbh, $file);
+      my $mod = new $module($configs);
    }
 }
 
@@ -53,27 +52,26 @@ sub generate_db {
    );
 
    # Generate default tables and info
-   my $query = 'CREATE TABLE modules (module_id INTEGER PRIMARY KEY ASC '
-      . 'AUTOINCREMENT, module_name TEXT, module_type TEXT, module_config '
-      . 'INTEGER)';
+   my $query = 'CREATE TABLE IF NOT EXISTS modules (module_id INTEGER PRIMARY KEY ASC '
+      . 'AUTOINCREMENT, module_name TEXT, module_type TEXT);';
    my $tmp = $dbh->prepare($query);
    $tmp->execute;
    $tmp->finish;
 
-   $query = 'CREATE TABLE config (config_id INTEGER PRIMARY KEY ASC '
+   $query = 'CREATE TABLE IF NOT EXISTS config (config_id INTEGER PRIMARY KEY ASC '
       . 'AUTOINCREMENT, config_key TEXT, config_value TEXT, module_id '
       . 'INTEGER, FOREIGN KEY(module_id) REFERENCES modules(module_id))';
    $tmp = $dbh->prepare($query);
    $tmp->execute;
    $tmp->finish;
 
-   $query = 'CREATE TABLE users (user_id INTEGER PRIMARY KEY ASC '
+   $query = 'CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY ASC '
       . 'AUTOINCREMENT, user_name TEXT)';
    $tmp = $dbh->prepare($query);
    $tmp->execute;
    $tmp->finish;
 
-   $query = 'CREATE TABLE identities (ident_id INTEGER PRIMARY KEY ASC '
+   $query = 'CREATE TABLE IF NOT EXISTS identities (ident_id INTEGER PRIMARY KEY ASC '
       . 'AUTOINCREMENT, user_id INTEGER, ident_name STRING, module_id '
       . 'INTEGER, FOREIGN KEY(user_id) REFERENCES users(user_id), FOREIGN '
       . 'KEY(module_id) REFERENCES modules(module_id))';
@@ -81,14 +79,14 @@ sub generate_db {
    $tmp->execute;
    $tmp->finish;
 
-   $query = 'CREATE TABLE commands (cmd_id INTEGER PRIMARY KEY ASC '
+   $query = 'CREATE TABLE IF NOT EXISTS commands (cmd_id INTEGER PRIMARY KEY ASC '
       . 'AUTOINCREMENT, cmd_name STRING, cmd_method STRING, module_id '
       . 'INTEGER, FOREIGN KEY(module_id) REFERENCES modules(module_id))';
    $tmp = $dbh->prepare($query);
    $tmp->execute;
    $tmp->finish;
 
-   $query = 'CREATE TABLE permissions (user_id INTEGER, cmd_id INTEGER, '
+   $query = 'CREATE TABLE IF NOT EXISTS permissions (user_id INTEGER, cmd_id INTEGER, '
       . 'FOREIGN KEY(user_id) REFERENCES users(user_id), FOREIGN '
       . 'KEY(cmd_id) REFERENCES commands(cmd_id))';
    $tmp = $dbh->prepare($query);
@@ -98,3 +96,49 @@ sub generate_db {
    $dbh->disconnect;
 
 } # end of generate_db method
+
+sub config_module {
+
+   my $dbh = shift;
+   my $file = shift;
+   $file =~ s/\.pm//gxms;
+   my $module = 'Modules::' . $file;
+
+   my $query = "SELECT * FROM modules WHERE module_name = '$file';";
+   my $tmp = $dbh->prepare($query);
+   $tmp->execute;
+
+   my $id = 0;
+   my $mods = $tmp->fetchall_arrayref;
+   $tmp->finish;
+   if( scalar(@{$mods}) == 0 ) {
+      my $query = "INSERT INTO modules (module_name) VALUES ('$file');";
+      my $tmp = $dbh->prepare($query);
+      $tmp->execute;
+      $tmp->finish;
+      $id = $dbh->last_insert_id("", "", "modules", "");
+      my $questions = $module->get_conf();
+      #TODO make this part work over available and precedence-based
+      #     communication modules
+      foreach my $key (keys $questions) {
+         print $questions->{$key};
+         chomp(my $value = <STDIN>);
+         $query = "INSERT INTO config (config_key, config_value, module_id) "
+            . "VALUES ('$key', '$value', $id);";
+         $tmp = $dbh->prepare($query);
+         $tmp->execute;
+         $tmp->finish;
+      }
+   } else {
+      $id = $mods->[0][0];
+   }
+   $query = "SELECT config_key, config_value FROM config WHERE module_id = $id;";
+   $tmp = $dbh->prepare($query);
+   $tmp->execute;
+   my $hash;
+   while( my $row =$tmp->fetchrow_hashref() ) {
+      $hash->{$row->{'config_key'}} = $row->{'config_value'};
+   }
+   return $hash;
+
+} #end of config_module method
