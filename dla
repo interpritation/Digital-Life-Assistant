@@ -142,3 +142,10 @@ sub config_module {
    return $hash;
 
 } #end of config_module method
+
+sub parse_message {
+
+   my $msg = shift;
+   return "Hey man! I'm a bot!";
+
+} # end  of parse_message method
