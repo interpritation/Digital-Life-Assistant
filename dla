@@ -8,10 +8,19 @@ use lib './';
 use AnyEvent;
 use Config::Simple;
 use DBI;
+use Fcntl qw(LOCK_EX LOCK_NB);
 
 my $j = AnyEvent->condvar;
 
-my $cnfile = './dla.conf';
+my @cnfopt = ('./dla.conf', '/etc/dla.conf', '~/.conf/dla.conf');
+my $cnfile;
+foreach my $test ( @cnfopt ) {
+   if( -e $test ) {
+      $cnfile = $test;
+      last;
+   }
+}
+   
 
 # Load config
 unless( -e $cnfile ) {
@@ -21,6 +30,32 @@ unless( -e $cnfile ) {
 my %config;
 Config::Simple->import_from($cnfile, \%config);
 my $dbfile = $config{'default.dbname'};
+
+# Check PID file
+if( -e $config{'default.pidfile'} ) {
+   open(PID, "< " . $config{'default.pidfile'});
+   my $pid = <PID>;
+   close PID;
+   print "dla already running PID: " . $pid . "\n";
+   exit;
+} else {
+   open(PID, "> " . $config{'default.pidfile'});
+   print PID $$;
+   close PID;
+}
+$SIG{'INT'} = 'END';
+
+open(STDOUT, ">>" . $config{'default.logfile'})
+   or die("Couldn't open logger output stream: $!\n");
+open(STDERR, ">&STDOUT")
+   or die("Couldn't redirect STDERR to STDOUT: $!\n");
+$| = 1;
+
+chdir('/');
+
+exit if (fork());
+exit if (fork());
+sleep 1 until getppid() == 1;
 
 # Connect to db
 generate_db();
@@ -162,3 +197,17 @@ sub parse_message {
    return "";
 
 } # end of parse_message method
+
+sub END { 
+
+   open(PID, "< " . $config{'default.pidfile'});
+   my $pid = <PID>;
+   close PID;
+   if( $pid == $$ ) {
+      unlink($config{'default.pidfile'});
+      print "Exiting...\n";
+   }
+   exit;
+
+} # end of END method
+

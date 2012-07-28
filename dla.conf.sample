@@ -1,8 +1,15 @@
 # dbname is the full filename of the database file
-dbname = dla.db
+dbname = /var/lib/dla/dla.db
 
 # dbuser is the username used to connect to the database
 dbuser = dla
 
 # dbpass is the password used to connect to the database
 dbpass = lamepass
+
+# logfile is the file that dla logs to
+logfile = /var/log/dla.log
+
+# pidfile is the file that dla uses to determine whether it is already running
+# or not
+pidfile = /var/run/dla/dla.pid
