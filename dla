@@ -141,22 +141,24 @@ sub config_module {
    }
    return $hash;
 
-} #end of config_module method
+} # end of config_module method
 
 sub parse_message {
 
    my $msg = shift;
    if( $msg =~ m/^(\S*)/xms ) {
       my $cmd = $1;
-      print $cmd . "\n";
       my $query = "SELECT * FROM commands WHERE cmd_name LIKE '%$cmd%';";
       my $tmp = $dbh->prepare($query);
       $tmp->execute;
-      while( my $row = $tmp->fetchrow_hashref() ) {
+      my $row = $tmp->fetchrow_hashref();
+      if( defined($row) ) {
          my $a = $row->{'cmd_method'};
+         $tmp->finish;
          return eval("$a(\$msg)");
       }
       $tmp->finish;
    }
+   return "";
 
-} # end  of parse_message method
+} # end of parse_message method
